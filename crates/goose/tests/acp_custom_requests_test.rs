@@ -1132,8 +1132,7 @@ fn test_developer_fs_requests_use_acp_session_id() {
             openai.uri()
         ));
         let config = TestConnectionConfig {
-            // gpt-5-nano routes to the Responses API; use a Chat Completions
-            // model so the canned SSE fixtures are parsed correctly.
+            // Use a Chat Completions model so the canned SSE fixtures parse correctly.
             data_root: config_dir,
             current_model: "gpt-4.1".to_string(),
             read_text_file: Some(Arc::new(move |req| {

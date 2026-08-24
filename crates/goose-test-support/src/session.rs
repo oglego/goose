@@ -1,12 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 pub const TEST_SESSION_ID: &str = "test-session-id";
-// Use a Chat Completions model so the canned SSE fixtures (which return
-// Chat Completions format) are parsed correctly. gpt-5-nano now routes to
-// the Responses API which needs a different mock format.
-// TODO: add a Responses API mock to OpenAiFixture so tests can cover
-// responses-routed models like gpt-5-nano end-to-end.
+// Default test model, routed through the Chat Completions API.
 pub const TEST_MODEL: &str = "gpt-4.1";
+// Responses-routed test model.
+pub const TEST_MODEL_RESPONSES: &str = "gpt-5-nano";
 
 const NOT_YET_SET: &str = "session-id-not-yet-set";
 pub(crate) const SESSION_ID_HEADER: &str = "agent-session-id";

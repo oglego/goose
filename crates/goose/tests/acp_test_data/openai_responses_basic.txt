@@ -1,0 +1,9 @@
+data: {"type":"response.created","sequence_number":1,"response":{"id":"resp-test","object":"response","created_at":1766229303,"status":"in_progress","model":"gpt-5-nano","output":[]}}
+
+data: {"type":"response.output_text.delta","sequence_number":2,"item_id":"msg-test","output_index":0,"content_index":0,"delta":"2"}
+
+data: {"type":"response.output_text.done","sequence_number":3,"item_id":"msg-test","output_index":0,"content_index":0,"text":"2"}
+
+data: {"type":"response.completed","sequence_number":4,"response":{"id":"resp-test","object":"response","created_at":1766229303,"status":"completed","model":"gpt-5-nano","output":[],"usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}
+
+data: [DONE]

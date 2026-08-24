@@ -24,10 +24,10 @@ use common_tests::{
     run_load_session_replays_image_attachment, run_mode_set, run_model_list, run_model_set,
     run_model_set_error_session_not_found, run_new_session_returns_initial_config,
     run_new_session_uses_current_config_mode, run_permission_persistence, run_prompt_basic,
-    run_prompt_error, run_prompt_image, run_prompt_image_attachment, run_prompt_mcp,
-    run_prompt_model_mismatch, run_prompt_skill, run_session_name_update_notification,
-    run_shell_terminal_false, run_shell_terminal_true, GENERATED_SESSION_TITLE,
-    OPENAI_SESSION_NAME_RESPONSE, TURN_CONTEXT_OPEN,
+    run_prompt_basic_responses_api, run_prompt_error, run_prompt_image,
+    run_prompt_image_attachment, run_prompt_mcp, run_prompt_model_mismatch, run_prompt_skill,
+    run_session_name_update_notification, run_shell_terminal_false, run_shell_terminal_true,
+    GENERATED_SESSION_TITLE, OPENAI_SESSION_NAME_RESPONSE, TURN_CONTEXT_OPEN,
 };
 use goose::config::GooseMode;
 use goose::conversation::message::{Message, MessageMetadata};
@@ -1181,6 +1181,11 @@ fn test_permission_persistence() {
 #[test]
 fn test_prompt_basic() {
     run_test(async { run_prompt_basic::<AcpServerConnection>().await });
+}
+
+#[test]
+fn test_prompt_basic_responses_api() {
+    run_test(async { run_prompt_basic_responses_api::<AcpServerConnection>().await });
 }
 
 #[test]
