@@ -532,7 +532,6 @@ pub async fn run_load_mode<C: Connection>() {
 
 pub async fn run_load_model<C: Connection>() {
     // Use a Chat Completions model so the canned SSE fixtures parse correctly.
-    // TODO: add a Responses API mock to OpenAiFixture for responses-routed models.
     let expected_session_id = C::expected_session_id();
     let openai = OpenAiFixture::new(
         vec![(
@@ -1003,7 +1002,6 @@ pub async fn run_model_set<C: Connection>() {
 
 async fn run_model_set_impl<C: Connection>() {
     // Use a Chat Completions model so the canned SSE fixtures parse correctly.
-    // TODO: add a Responses API mock to OpenAiFixture for responses-routed models.
     let expected_session_id = C::expected_session_id();
     let openai = OpenAiFixture::new(
         vec![
@@ -1231,6 +1229,63 @@ pub async fn run_prompt_basic<C: Connection>() {
     expected_session_id.assert_matches(&session.session_id().0);
 }
 
+/// Same as `run_prompt_basic`, but drives a model that routes through the
+/// OpenAI Responses API (`/v1/responses`) rather than Chat Completions, using
+/// a canned Responses-format SSE fixture end-to-end.
+pub async fn run_prompt_basic_responses_api<C: Connection>() {
+    let expected_session_id = C::expected_session_id();
+    let openai = OpenAiFixture::new(
+        vec![(
+            format!("what is 1+1{TURN_CONTEXT_OPEN}"),
+            include_str!("../acp_test_data/openai_responses_basic.txt"),
+        )],
+        expected_session_id.clone(),
+    )
+    .await;
+
+    let mut conn = C::new(
+        TestConnectionConfig {
+            current_model: goose_test_support::TEST_MODEL_RESPONSES.to_string(),
+            ..Default::default()
+        },
+        openai,
+    )
+    .await;
+    let SessionData { mut session, .. } = conn.new_session().await.unwrap();
+    expected_session_id.set(&session.session_id().0);
+
+    let output = session
+        .prompt("what is 1+1", PermissionDecision::Cancel)
+        .await
+        .unwrap();
+    assert_eq!(output.text, "2");
+    let updates = session.session_updates();
+    let (standard_message_id, goose_message_id) = updates
+        .iter()
+        .find_map(|update| {
+            let SessionUpdate::AgentMessageChunk(chunk) = update else {
+                return None;
+            };
+            let standard_message_id = chunk.message_id.as_ref()?.0.to_string();
+            let goose_message_id = chunk
+                .meta
+                .as_ref()?
+                .get("goose")?
+                .get("messageId")?
+                .as_str()?
+                .to_string();
+            Some((standard_message_id, goose_message_id))
+        })
+        .expect("expected live agent message chunk with standard and goose message IDs");
+    assert!(!standard_message_id.is_empty());
+    assert_eq!(standard_message_id, goose_message_id);
+    assert_notifications(
+        &fixtures::to_notifications(&updates),
+        &[Notification::AgentMessage],
+    );
+    expected_session_id.assert_matches(&session.session_id().0);
+}
+
 pub async fn run_prompt_codemode<C: Connection>() {
     let expected_session_id = C::expected_session_id();
     let prompt =
@@ -1406,8 +1461,6 @@ pub async fn run_prompt_mcp<C: Connection>() {
 pub async fn run_prompt_model_mismatch<C: Connection>() {
     // Start the connection where the current model differs from TEST_MODEL.
     // Use a Chat Completions model so the canned SSE fixtures parse correctly.
-    // TODO: add a Responses API mock to OpenAiFixture so we can test with
-    // responses-routed models like o4-mini here.
     let config = TestConnectionConfig {
         current_model: "gpt-4o".to_string(),
         ..Default::default()

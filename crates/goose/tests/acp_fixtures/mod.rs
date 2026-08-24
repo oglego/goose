@@ -216,8 +216,8 @@ pub struct OpenAiFixture {
 }
 
 impl OpenAiFixture {
-    /// Mock OpenAI streaming endpoint. Exchanges are (pattern, response) pairs.
-    /// On mismatch, returns 417 of the diff in OpenAI error format.
+    /// Mock OpenAI streaming endpoints for chat completions and responses.
+    /// Exchanges are `(pattern, response)` pairs.
     pub async fn new(
         exchanges: Vec<(String, &'static str)>,
         expected_session_id: Arc<dyn ExpectedSessionId>,
@@ -236,53 +236,55 @@ impl OpenAiFixture {
             .mount(&mock_server)
             .await;
 
-        Mock::given(method("POST"))
-            .and(path("/v1/chat/completions"))
-            .respond_with({
-                let queue = queue.clone();
-                let expected_session_id = expected_session_id.clone();
-                move |req: &wiremock::Request| {
-                    let body = std::str::from_utf8(&req.body).unwrap_or("");
+        for endpoint in ["/v1/chat/completions", "/v1/responses"] {
+            Mock::given(method("POST"))
+                .and(path(endpoint))
+                .respond_with({
+                    let queue = queue.clone();
+                    let expected_session_id = expected_session_id.clone();
+                    move |req: &wiremock::Request| {
+                        let body = std::str::from_utf8(&req.body).unwrap_or("");
 
-                    // Validate session ID header
-                    let actual = req
-                        .headers
-                        .get(SESSION_ID_HEADER)
-                        .and_then(|v| v.to_str().ok());
-                    if let Err(e) = expected_session_id.validate(actual) {
-                        return ResponseTemplate::new(417)
+                        // Validate session ID header
+                        let actual = req
+                            .headers
+                            .get(SESSION_ID_HEADER)
+                            .and_then(|v| v.to_str().ok());
+                        if let Err(e) = expected_session_id.validate(actual) {
+                            return ResponseTemplate::new(417)
+                                .insert_header("content-type", "application/json")
+                                .set_body_json(serde_json::json!({"error": {"message": e}}));
+                        }
+
+                        // See if the actual request matches the expected pattern
+                        let mut q = queue.lock().unwrap();
+                        let (expected_body, response) = q.front().cloned().unwrap_or_default();
+                        if !expected_body.is_empty() && body.contains(&expected_body) {
+                            q.pop_front();
+                            return ResponseTemplate::new(200)
+                                .insert_header("content-type", "text/event-stream")
+                                .set_body_string(response);
+                        }
+                        drop(q);
+
+                        // If there was no body, the request was unexpected. Otherwise, it is a mismatch.
+                        let message = if expected_body.is_empty() {
+                            format!("Unexpected request:\n  {}", body)
+                        } else {
+                            format!(
+                                "Expected body to contain:\n  {}\n\nActual body:\n  {}",
+                                expected_body, body
+                            )
+                        };
+                        // Use OpenAI's error response schema so the provider will pass the error through.
+                        ResponseTemplate::new(417)
                             .insert_header("content-type", "application/json")
-                            .set_body_json(serde_json::json!({"error": {"message": e}}));
+                            .set_body_json(serde_json::json!({"error": {"message": message}}))
                     }
-
-                    // See if the actual request matches the expected pattern
-                    let mut q = queue.lock().unwrap();
-                    let (expected_body, response) = q.front().cloned().unwrap_or_default();
-                    if !expected_body.is_empty() && body.contains(&expected_body) {
-                        q.pop_front();
-                        return ResponseTemplate::new(200)
-                            .insert_header("content-type", "text/event-stream")
-                            .set_body_string(response);
-                    }
-                    drop(q);
-
-                    // If there was no body, the request was unexpected. Otherwise, it is a mismatch.
-                    let message = if expected_body.is_empty() {
-                        format!("Unexpected request:\n  {}", body)
-                    } else {
-                        format!(
-                            "Expected body to contain:\n  {}\n\nActual body:\n  {}",
-                            expected_body, body
-                        )
-                    };
-                    // Use OpenAI's error response schema so the provider will pass the error through.
-                    ResponseTemplate::new(417)
-                        .insert_header("content-type", "application/json")
-                        .set_body_json(serde_json::json!({"error": {"message": message}}))
-                }
-            })
-            .mount(&mock_server)
-            .await;
+                })
+                .mount(&mock_server)
+                .await;
+        }
 
         let base_url = mock_server.uri();
         Self {
